@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function displayRecentBookmarks() {
     // Define how many recent bookmarks you want to show
-    const maxRecentBookmarks = 5;
+    const maxRecentBookmarks = 20;
 
     chrome.bookmarks.getRecent(maxRecentBookmarks, function (recentBookmarks) {
         const recentBookmarksList = document.getElementById('recentBookmarks');

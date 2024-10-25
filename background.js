@@ -1,41 +1,75 @@
-// Function to recursively sort bookmarks inside folders
-function sortBookmarksRecursively(bookmarkTreeNodes) {
-    if (!bookmarkTreeNodes || bookmarkTreeNodes.length === 0) return;
+function sortBookmarksRecursively(bookmarkTreeNode) {
+    // Skip if node is undefined or null
+    if (!bookmarkTreeNode) return;
 
-    bookmarkTreeNodes.forEach(node => {
-        if (node.children && node.children.length > 0) {
-            // Sort by title
-            node.children.sort((a, b) => a.title.localeCompare(b.title));
+    // If node has children (is a folder), sort them
+    if (bookmarkTreeNode.children) {
+        // Sort current level
+        bookmarkTreeNode.children.sort((a, b) => {
+            // Folders come before bookmarks
+            if (a.children && !b.children) return -1;
+            if (!a.children && b.children) return 1;
 
-            // Recurse to sort child bookmarks/folders
-            sortBookmarksRecursively(node.children);
+            // Sort alphabetically by title
+            return a.title.localeCompare(b.title);
+        });
+
+        // Recursively sort each child that is a folder
+        bookmarkTreeNode.children.forEach(child => {
+            sortBookmarksRecursively(child);
+        });
+    }
+}
+
+function updateFolderChildren(folder) {
+    folder.children.forEach(node => {
+        chrome.bookmarks.move(node.id, {
+            parentId: folder.id,
+            index: folder.children.indexOf(node)
+        });
+
+        // Recursively update if this is also a folder
+        if (node.children) {
+            updateFolderChildren(node);
         }
     });
 }
 
-// Function to initiate sorting of all bookmarks
+// Main function to sort all bookmarks
 function sortAllBookmarks() {
-    chrome.bookmarks.getTree(function (bookmarkTree) {
-        sortBookmarksRecursively(bookmarkTree);
-        updateBookmarksTree(bookmarkTree[0].children); // Pass bookmarks directly under Bookmark Bar, etc.
-    });
-}
+    chrome.bookmarks.getTree((bookmarkTreeNodes) => {
+        const rootNode = bookmarkTreeNodes[0];
 
-// Function to update the entire bookmark tree after sorting
-function updateBookmarksTree(bookmarks) {
-    bookmarks.forEach(node => recursivelyUpdateBookmarks(node));
-}
+        // Sort all three main folders
+        const mainFolders = [
+            { name: 'Bookmarks Bar', index: 0 },
+            { name: 'Other Bookmarks', index: 1 },
+            { name: 'Mobile Bookmarks', index: 2 }
+        ];
 
-// Helper function to update each bookmark recursively
-function recursivelyUpdateBookmarks(node) {
-    chrome.bookmarks.move(node.id, { parentId: node.parentId, index: node.index });
+        mainFolders.forEach(folder => {
+            const bookmarkFolder = rootNode.children[folder.index];
+            if (bookmarkFolder) {
+                console.log(`Sorting ${folder.name}...`);
+                sortBookmarksRecursively(bookmarkFolder);
 
-    if (node.children && node.children.length > 0) {
-        node.children.forEach((childNode, index) => {
-            chrome.bookmarks.move(childNode.id, { parentId: node.id, index });
-            recursivelyUpdateBookmarks(childNode);
+                // Update the bookmarks in this folder
+                bookmarkFolder.children.forEach(node => {
+                    chrome.bookmarks.move(node.id, {
+                        parentId: bookmarkFolder.id,
+                        index: bookmarkFolder.children.indexOf(node)
+                    });
+
+                    // If this is a folder, update its children recursively
+                    if (node.children) {
+                        updateFolderChildren(node);
+                    }
+                });
+            }
         });
-    }
+
+        console.log('Bookmark sorting complete!');
+    });
 }
 
 // Listen for messages from popup
